@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+rapport_du_jour.json
+scheduler.log
+.venv/

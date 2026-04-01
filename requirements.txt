@@ -1,0 +1,19 @@
+# Serveur web
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+
+# Anthropic Claude
+anthropic>=0.25.0
+
+# Recherche web
+requests>=2.31.0
+
+# Variables d'environnement
+python-dotenv>=1.0.0
+
+# Scheduler
+schedule>=1.2.0
+APScheduler>=3.10.0
+
+# Twilio (WhatsApp)
+twilio>=9.0.0

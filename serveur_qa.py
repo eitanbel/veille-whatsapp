@@ -15,7 +15,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 import anthropic
 from dotenv import load_dotenv
@@ -224,3 +224,27 @@ async def twilio_webhook(request: Request):
         "</Response>"
     )
     return PlainTextResponse(content=twiml, media_type="application/xml")
+
+
+@app.post("/generer")
+async def generer_rapport(request: Request, background_tasks: BackgroundTasks):
+    """
+    Endpoint appelé par cron-job.org chaque matin à 9h.
+    Protégé par un token secret (variable CRON_SECRET dans .env).
+    Lance la génération en arrière-plan et répond immédiatement.
+    """
+    cron_secret = os.getenv("CRON_SECRET", "")
+    if cron_secret:
+        token = request.headers.get("X-Cron-Secret", "")
+        if token != cron_secret:
+            return PlainTextResponse("Non autorisé", status_code=401)
+
+    def lancer_generation():
+        try:
+            from generer_rapport import main
+            main(dry_run=False)
+        except Exception as e:
+            print(f"[ERREUR] Génération du rapport échouée : {e}")
+
+    background_tasks.add_task(lancer_generation)
+    return {"status": "ok", "message": "Génération du rapport lancée en arrière-plan"}

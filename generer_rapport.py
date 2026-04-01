@@ -40,6 +40,7 @@ TWILIO_SID         = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN       = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM        = os.getenv("TWILIO_WHATSAPP_FROM", "")
 WHATSAPP_DEST      = os.getenv("WHATSAPP_DEST", "")
+SERVEUR_URL        = os.getenv("SERVEUR_URL", "")
 
 THEMES = [
     {
@@ -186,8 +187,32 @@ def generer_rapport_claude(articles: dict, date_str: str) -> str:
 # Étape 3 : Envoi WhatsApp via Twilio
 # ---------------------------------------------------------------------------
 
+def decouper_messages(rapport: str, limite: int = 1550) -> list:
+    """
+    Découpe le rapport en plusieurs messages si nécessaire.
+    Coupe proprement entre les sections (🤖, 💼, 🌍).
+    """
+    if len(rapport) <= limite:
+        return [rapport]
+
+    separateurs = ["💼", "🌍", "---"]
+    parties = [rapport]
+    for sep in separateurs:
+        nouvelles_parties = []
+        for partie in parties:
+            if len(partie) > limite and sep in partie:
+                idx = partie.index(sep)
+                nouvelles_parties.append(partie[:idx].rstrip())
+                nouvelles_parties.append(partie[idx:])
+            else:
+                nouvelles_parties.append(partie)
+        parties = nouvelles_parties
+
+    return [p for p in parties if p.strip()]
+
+
 def envoyer_whatsapp(message: str) -> bool:
-    """Envoie le rapport sur WhatsApp via Twilio. Retourne True si succès."""
+    """Envoie le rapport sur WhatsApp via Twilio (découpe si > 1550 chars)."""
     for var, nom in [
         (TWILIO_SID,   "TWILIO_ACCOUNT_SID"),
         (TWILIO_TOKEN, "TWILIO_AUTH_TOKEN"),
@@ -200,12 +225,17 @@ def envoyer_whatsapp(message: str) -> bool:
 
     try:
         twilio = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
-        msg = twilio.messages.create(
-            from_=TWILIO_FROM,
-            to=WHATSAPP_DEST,
-            body=message,
-        )
-        print(f"[INFO] WhatsApp envoyé — SID : {msg.sid}")
+        parties = decouper_messages(message)
+        print(f"[INFO] Envoi en {len(parties)} message(s)...")
+
+        for i, partie in enumerate(parties, 1):
+            msg = twilio.messages.create(
+                from_=TWILIO_FROM,
+                to=WHATSAPP_DEST,
+                body=partie,
+            )
+            print(f"[INFO] Message {i}/{len(parties)} envoyé — SID : {msg.sid}")
+
         return True
     except Exception as e:
         print(f"[ERREUR] Envoi WhatsApp échoué : {e}")
@@ -217,7 +247,7 @@ def envoyer_whatsapp(message: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def sauvegarder_rapport(rapport: str, date_str: str, raw: dict):
-    """Sauvegarde le rapport dans rapport_du_jour.json."""
+    """Sauvegarde le rapport localement et l'envoie au serveur Render si configuré."""
     data = {
         "rapport": rapport,
         "date": date_str,
@@ -228,6 +258,21 @@ def sauvegarder_rapport(rapport: str, date_str: str, raw: dict):
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"[INFO] Rapport sauvegardé dans {RAPPORT_FILE}")
+
+    # Envoi au serveur distant (Render) pour le Q&A WhatsApp
+    if SERVEUR_URL:
+        try:
+            resp = requests.post(
+                f"{SERVEUR_URL.rstrip('/')}/rapport",
+                json={"rapport": rapport, "date": date_str},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                print(f"[INFO] Rapport envoyé au serveur distant : {SERVEUR_URL}")
+            else:
+                print(f"[ERREUR] Serveur distant a répondu {resp.status_code}")
+        except Exception as e:
+            print(f"[ERREUR] Impossible d'envoyer au serveur distant : {e}")
 
 
 # ---------------------------------------------------------------------------

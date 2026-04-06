@@ -226,12 +226,16 @@ async def twilio_webhook(request: Request):
     return PlainTextResponse(content=twiml, media_type="application/xml")
 
 
+@app.get("/ping")
+async def ping():
+    return {"status": "ok"}
+
+
 @app.post("/generer")
-async def generer_rapport(request: Request, background_tasks: BackgroundTasks):
+async def generer(background_tasks: BackgroundTasks, request: Request):
     """
-    Endpoint appelé par cron-job.org chaque matin à 9h.
-    Protégé par un token secret (variable CRON_SECRET dans .env).
-    Lance la génération en arrière-plan et répond immédiatement.
+    Appelé par cron-job.org chaque matin à 9h.
+    Protégé par CRON_SECRET. Répond immédiatement, pipeline en arrière-plan.
     """
     cron_secret = os.getenv("CRON_SECRET", "")
     if cron_secret:
@@ -239,12 +243,12 @@ async def generer_rapport(request: Request, background_tasks: BackgroundTasks):
         if token != cron_secret:
             return PlainTextResponse("Non autorisé", status_code=401)
 
-    def lancer_generation():
+    def pipeline_complet():
         try:
             from generer_rapport import main
             main(dry_run=False)
         except Exception as e:
             print(f"[ERREUR] Génération du rapport échouée : {e}")
 
-    background_tasks.add_task(lancer_generation)
-    return {"status": "ok", "message": "Génération du rapport lancée en arrière-plan"}
+    background_tasks.add_task(pipeline_complet)
+    return {"status": "ok"}

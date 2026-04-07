@@ -231,7 +231,7 @@ async def ping():
     return {"status": "ok"}
 
 
-@app.post("/generer")
+@app.api_route("/generer", methods=["GET", "POST"])
 async def generer(background_tasks: BackgroundTasks, request: Request):
     """
     Appelé par cron-job.org chaque matin à 9h.
